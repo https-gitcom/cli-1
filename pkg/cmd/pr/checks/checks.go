@@ -308,4 +308,6 @@ func populateStatusChecks(client *http.Client, repo ghrepo.Interface, pr *api.Pu
 		return checks, counts, fmt.Errorf("no required checks reported on the '%s' branch", pr.HeadRefName)
 	}
 	return checks, counts, nil
+	pkg/cmd/pr/checks/checks.go
+	
 }
