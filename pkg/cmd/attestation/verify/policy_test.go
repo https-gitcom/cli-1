@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/cli/cli/v2/pkg/cmd/attestation/verification"
-	"github.com/cli/cli/v2/pkg/cmd/factory"
 
 	"github.com/stretchr/testify/require"
 )
@@ -12,12 +11,30 @@ import (
 func TestNewEnforcementCriteria(t *testing.T) {
 	artifactPath := "../test/data/sigstore-js-2.1.0.tgz"
 
+	t.Run("sets SANRegex and SAN using SANRegex and SAN", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath:   artifactPath,
+			Owner:          "foo",
+			Repo:           "foo/bar",
+			SAN:            "https://github/foo/bar/.github/workflows/attest.yml",
+			SANRegex:       "(?i)^https://github/foo",
+			SignerRepo:     "wrong/value",
+			SignerWorkflow: "wrong/value/.github/workflows/attest.yml",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "https://github/foo/bar/.github/workflows/attest.yml", c.SAN)
+		require.Equal(t, "(?i)^https://github/foo", c.SANRegex)
+	})
+
 	t.Run("sets SANRegex using SignerRepo", func(t *testing.T) {
 		opts := &Options{
-			ArtifactPath: artifactPath,
-			Owner:        "foo",
-			Repo:         "foo/bar",
-			SignerRepo:   "foo/bar",
+			ArtifactPath:   artifactPath,
+			Owner:          "wrong",
+			Repo:           "wrong/value",
+			SignerRepo:     "foo/bar",
+			SignerWorkflow: "wrong/value/.github/workflows/attest.yml",
 		}
 
 		c, err := newEnforcementCriteria(opts)
@@ -26,11 +43,27 @@ func TestNewEnforcementCriteria(t *testing.T) {
 		require.Zero(t, c.SAN)
 	})
 
+	t.Run("sets SANRegex using SignerRepo and Tenant", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath:   artifactPath,
+			Owner:          "wrong",
+			Repo:           "wrong/value",
+			SignerRepo:     "foo/bar",
+			SignerWorkflow: "wrong/value/.github/workflows/attest.yml",
+			Tenant:         "baz",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "(?i)^https://baz.ghe.com/foo/bar/", c.SANRegex)
+		require.Zero(t, c.SAN)
+	})
+
 	t.Run("sets SANRegex using SignerWorkflow matching host regex", func(t *testing.T) {
 		opts := &Options{
 			ArtifactPath:   artifactPath,
-			Owner:          "foo",
-			Repo:           "foo/bar",
+			Owner:          "wrong",
+			Repo:           "wrong/value",
 			SignerWorkflow: "foo/bar/.github/workflows/attest.yml",
 			Hostname:       "github.com",
 		}
@@ -41,19 +74,27 @@ func TestNewEnforcementCriteria(t *testing.T) {
 		require.Zero(t, c.SAN)
 	})
 
-	t.Run("sets SANRegex and SAN using SANRegex and SAN", func(t *testing.T) {
+	t.Run("sets SANRegex using opts.Repo", func(t *testing.T) {
 		opts := &Options{
 			ArtifactPath: artifactPath,
-			Owner:        "foo",
+			Owner:        "wrong",
 			Repo:         "foo/bar",
-			SAN:          "https://github/foo/bar/.github/workflows/attest.yml",
-			SANRegex:     "(?i)^https://github/foo",
 		}
 
 		c, err := newEnforcementCriteria(opts)
 		require.NoError(t, err)
-		require.Equal(t, "https://github/foo/bar/.github/workflows/attest.yml", c.SAN)
-		require.Equal(t, "(?i)^https://github/foo", c.SANRegex)
+		require.Equal(t, "(?i)^https://github.com/foo/bar/", c.SANRegex)
+	})
+
+	t.Run("sets SANRegex using opts.Owner", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath: artifactPath,
+			Owner:        "foo",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "(?i)^https://github.com/foo/", c.SANRegex)
 	})
 
 	t.Run("sets Extensions.RunnerEnvironment to GitHubRunner value if opts.DenySelfHostedRunner is true", func(t *testing.T) {
@@ -105,6 +146,22 @@ func TestNewEnforcementCriteria(t *testing.T) {
 		c, err := newEnforcementCriteria(opts)
 		require.NoError(t, err)
 		require.Equal(t, "https://github.com/foo/bar", c.Certificate.SourceRepositoryURI)
+	})
+
+	t.Run("sets SANRegex and SAN using SANRegex and SAN, sets Extensions.SourceRepositoryURI using opts.Repo", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath: artifactPath,
+			Owner:        "baz",
+			Repo:         "baz/xyz",
+			SAN:          "https://github/foo/bar/.github/workflows/attest.yml",
+			SANRegex:     "(?i)^https://github/foo",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "https://github/foo/bar/.github/workflows/attest.yml", c.SAN)
+		require.Equal(t, "(?i)^https://github/foo", c.SANRegex)
+		require.Equal(t, "https://github.com/baz/xyz", c.Certificate.SourceRepositoryURI)
 	})
 
 	t.Run("sets Extensions.SourceRepositoryOwnerURI using opts.Owner and opts.Tenant", func(t *testing.T) {
@@ -159,6 +216,48 @@ func TestNewEnforcementCriteria(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "https://foo.com", c.Certificate.Issuer)
 	})
+
+	t.Run("sets Certificate.BuildSignerDigest using opts.SignerDigest", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath: artifactPath,
+			Owner:        "wrong",
+			Repo:         "wrong/value",
+			SignerDigest: "foo",
+			Hostname:     "github.com",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "foo", c.Certificate.BuildSignerDigest)
+	})
+
+	t.Run("sets Certificate.SourceRepositoryDigest using opts.SourceDigest", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath: artifactPath,
+			Owner:        "wrong",
+			Repo:         "wrong/value",
+			SourceDigest: "foo",
+			Hostname:     "github.com",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "foo", c.Certificate.SourceRepositoryDigest)
+	})
+
+	t.Run("sets Certificate.SourceRepositoryRef using opts.SourceRef", func(t *testing.T) {
+		opts := &Options{
+			ArtifactPath: artifactPath,
+			Owner:        "wrong",
+			Repo:         "wrong/value",
+			SourceRef:    "refs/heads/main",
+			Hostname:     "github.com",
+		}
+
+		c, err := newEnforcementCriteria(opts)
+		require.NoError(t, err)
+		require.Equal(t, "refs/heads/main", c.Certificate.SourceRepositoryRef)
+	})
 }
 
 func TestValidateSignerWorkflow(t *testing.T) {
@@ -176,7 +275,7 @@ func TestValidateSignerWorkflow(t *testing.T) {
 			name:                   "workflow with no host specified",
 			providedSignerWorkflow: "github/artifact-attestations-workflows/.github/workflows/attest.yml",
 			expectErr:              true,
-			errContains:            "unknown host",
+			errContains:            "unknown signer workflow host",
 		},
 		{
 			name:                   "workflow with default host",
@@ -205,14 +304,8 @@ func TestValidateSignerWorkflow(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		opts := &Options{
-			Config:         factory.New("test").Config,
-			SignerWorkflow: tc.providedSignerWorkflow,
-		}
-
 		// All host resolution is done verify.go:RunE
-		opts.Hostname = tc.host
-		workflowRegex, err := validateSignerWorkflow(opts)
+		workflowRegex, err := validateSignerWorkflow(tc.host, tc.providedSignerWorkflow)
 		require.Equal(t, tc.expectedWorkflowRegex, workflowRegex)
 
 		if tc.expectErr {

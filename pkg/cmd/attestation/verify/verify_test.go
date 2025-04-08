@@ -91,7 +91,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsErr: false,
@@ -108,7 +107,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://foo.ghe.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsErr: false,
@@ -125,7 +123,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsErr: true,
@@ -142,7 +139,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsErr: false,
@@ -190,7 +186,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsErr: false,
@@ -206,7 +201,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsErr: false,
@@ -256,7 +250,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    verification.SLSAPredicateV1,
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsExporter: true,
@@ -273,7 +266,6 @@ func TestNewVerifyCmd(t *testing.T) {
 				OIDCIssuer:       verification.GitHubOIDCIssuer,
 				Owner:            "sigstore",
 				PredicateType:    "https://spdx.dev/Document/v2.3",
-				SANRegex:         "(?i)^https://github.com/sigstore/",
 				SigstoreVerifier: verification.NewMockSigstoreVerifier(t),
 			},
 			wantsExporter: true,
@@ -423,7 +415,7 @@ func TestRunVerify(t *testing.T) {
 		opts.BundlePath = ""
 		opts.Owner = "sigstore"
 
-		require.Nil(t, runVerify(&opts))
+		require.NoError(t, runVerify(&opts))
 	})
 
 	t.Run("with owner which not matches SourceRepositoryOwnerURI", func(t *testing.T) {
@@ -457,10 +449,10 @@ func TestRunVerify(t *testing.T) {
 	t.Run("with repo which not matches SourceRepositoryURI", func(t *testing.T) {
 		opts := publicGoodOpts
 		opts.BundlePath = ""
-		opts.Repo = "wrong/example"
+		opts.Repo = "sigstore/wrong"
 
 		err := runVerify(&opts)
-		require.ErrorContains(t, err, "expected SourceRepositoryURI to be https://github.com/wrong/example, got https://github.com/sigstore/sigstore-js")
+		require.ErrorContains(t, err, "expected SourceRepositoryURI to be https://github.com/sigstore/wrong, got https://github.com/sigstore/sigstore-js")
 	})
 
 	t.Run("with invalid repo", func(t *testing.T) {
@@ -507,6 +499,18 @@ func TestRunVerify(t *testing.T) {
 		customOpts.UseBundleFromRegistry = true
 
 		require.Nil(t, runVerify(&customOpts))
+	})
+
+	t.Run("with valid OCI artifact with UseBundleFromRegistry flag and unknown predicate type", func(t *testing.T) {
+		customOpts := publicGoodOpts
+		customOpts.ArtifactPath = "oci://ghcr.io/github/test"
+		customOpts.BundlePath = ""
+		customOpts.UseBundleFromRegistry = true
+		customOpts.PredicateType = "https://predicate.type"
+
+		err := runVerify(&customOpts)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "no matching predicate found")
 	})
 
 	t.Run("with valid OCI artifact with UseBundleFromRegistry flag but no bundle return from registry", func(t *testing.T) {

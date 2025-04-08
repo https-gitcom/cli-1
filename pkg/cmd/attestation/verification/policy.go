@@ -3,6 +3,7 @@ package verification
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/cli/cli/v2/pkg/cmd/attestation/artifact"
 
@@ -48,4 +49,56 @@ func (c EnforcementCriteria) Valid() error {
 		return fmt.Errorf("SANRegex or SAN must be set")
 	}
 	return nil
+}
+
+func (c EnforcementCriteria) BuildPolicyInformation() string {
+	policyAttr := [][]string{}
+
+	policyAttr = appendStr(policyAttr, "- Predicate type must match", c.PredicateType)
+
+	policyAttr = appendStr(policyAttr, "- Source Repository Owner URI must match", c.Certificate.SourceRepositoryOwnerURI)
+
+	if c.Certificate.SourceRepositoryURI != "" {
+		policyAttr = appendStr(policyAttr, "- Source Repository URI must match", c.Certificate.SourceRepositoryURI)
+	}
+
+	if c.Certificate.BuildSignerDigest != "" {
+		policyAttr = appendStr(policyAttr, "- Build signer digest must match", c.Certificate.BuildSignerDigest)
+	}
+	if c.Certificate.SourceRepositoryDigest != "" {
+		policyAttr = appendStr(policyAttr, "- Source repo digest digest must match", c.Certificate.SourceRepositoryDigest)
+	}
+	if c.Certificate.SourceRepositoryRef != "" {
+		policyAttr = appendStr(policyAttr, "- Source repo ref must match", c.Certificate.SourceRepositoryRef)
+	}
+
+	if c.SAN != "" {
+		policyAttr = appendStr(policyAttr, "- Subject Alternative Name must match", c.SAN)
+	} else if c.SANRegex != "" {
+		policyAttr = appendStr(policyAttr, "- Subject Alternative Name must match regex", c.SANRegex)
+	}
+
+	policyAttr = appendStr(policyAttr, "- OIDC Issuer must match", c.Certificate.Issuer)
+	if c.Certificate.RunnerEnvironment == GitHubRunner {
+		policyAttr = appendStr(policyAttr, "- Action workflow Runner Environment must match ", GitHubRunner)
+	}
+
+	maxColLen := 0
+	for _, attr := range policyAttr {
+		if len(attr[0]) > maxColLen {
+			maxColLen = len(attr[0])
+		}
+	}
+
+	policyInfo := ""
+	for _, attr := range policyAttr {
+		dots := strings.Repeat(".", maxColLen-len(attr[0]))
+		policyInfo += fmt.Sprintf("%s:%s %s\n", attr[0], dots, attr[1])
+	}
+
+	return policyInfo
+}
+
+func appendStr(arr [][]string, a, b string) [][]string {
+	return append(arr, []string{a, b})
 }

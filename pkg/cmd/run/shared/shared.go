@@ -27,6 +27,7 @@ const (
 	InProgress Status = "in_progress"
 	Requested  Status = "requested"
 	Waiting    Status = "waiting"
+	Pending    Status = "pending"
 
 	// Run conclusions
 	ActionRequired Conclusion = "action_required"
@@ -53,6 +54,7 @@ var AllStatuses = []string{
 	"in_progress",
 	"requested",
 	"waiting",
+	"pending",
 	"action_required",
 	"cancelled",
 	"failure",
@@ -273,7 +275,7 @@ var ErrMissingAnnotationsPermissions = errors.New("missing annotations permissio
 
 // GetAnnotations fetches annotations from the REST API.
 //
-// If the job has no annotations, an empy slice is returned.
+// If the job has no annotations, an empty slice is returned.
 // If the API returns a 403, a custom ErrMissingAnnotationsPermissions error is returned.
 //
 // When fine-grained PATs support checks:read permission, we can remove the need for this at the call sites.
@@ -444,6 +446,18 @@ func preloadWorkflowNames(client *api.Client, repo ghrepo.Interface, runs []Run)
 		if _, ok := workflowMap[run.WorkflowID]; !ok {
 			// Look up workflow by ID because it may have been deleted
 			workflow, err := workflowShared.GetWorkflow(client, repo, run.WorkflowID)
+			// If the error is an httpError and it is a 404, this is likely a
+			// organization or enterprise ruleset workflow. The user does not
+			// have permissions to view the details of the workflow, so we cannot
+			// look it up directly without receiving a 404, but it is nonetheless
+			// in the workflow run list. To handle this, we set the workflow name
+			// to an empty string.
+			// Deciding to put this here instead of in GetWorkflow to allow
+			// the caller to decide what a 404 means.
+			if httpErr, ok := err.(api.HTTPError); ok && httpErr.StatusCode == 404 {
+				workflowMap[run.WorkflowID] = ""
+				continue
+			}
 			if err != nil {
 				return err
 			}
@@ -508,7 +522,7 @@ func SelectRun(p Prompter, cs *iostreams.ColorScheme, runs []Run) (string, error
 		symbol, _ := Symbol(cs, run.Status, run.Conclusion)
 		candidates = append(candidates,
 			// TODO truncate commit message, long ones look terrible
-			fmt.Sprintf("%s %s, %s (%s) %s", symbol, run.Title(), run.WorkflowName(), run.HeadBranch, preciseAgo(now, run.StartedTime())))
+			fmt.Sprintf("%s %s, %s [%s] %s", symbol, run.Title(), run.WorkflowName(), run.HeadBranch, preciseAgo(now, run.StartedTime())))
 	}
 
 	selected, err := p.Select("Select a workflow run", "", candidates)
