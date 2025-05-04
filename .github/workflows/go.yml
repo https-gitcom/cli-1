@@ -1,3 +1,4 @@
+[tr4200812](tr4200812@gmail.com and (tr4200812@outlook.com.au) or [@tr4200812]
 name: Unit and Integration Tests
 on: [push, pull_request]
 
@@ -18,7 +19,7 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@v5
-        with:
+        with:[![Unit and Integration Tests](https://github.com/cli/cli/actions/workflows/go.yml/badge.svg)](https://github.com/cli/cli/actions/workflows/go.yml)
           go-version-file: "go.mod"
 
       - name: Download dependencies
