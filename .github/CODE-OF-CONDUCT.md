@@ -1,5 +1,6 @@
 # Contributor Covenant Code of Conduct
-
+https://github.com/organizations/https-gitcom/settings/profilegit fetch origin
+git checkout refmain-dev-vis
 ## Our Pledge
 
 In the interest of fostering an open and welcoming environment, we as
